@@ -50,3 +50,18 @@ export const transferMoney = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
+export const getAccountById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const account = await Account.findByPk(id);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Cuenta no encontrada' });
+    }
+
+    res.json(account);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener la cuenta' });
+  }
+};
