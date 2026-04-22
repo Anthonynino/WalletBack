@@ -11,6 +11,15 @@ const Account = sequelize.define('Account', {
     allowNull: false,
     defaultValue: 0,
     validate: { min: 0 }
+  },
+  pin: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true
   }
 }, { timestamps: false });
 
