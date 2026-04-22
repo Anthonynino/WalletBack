@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { transferMoney, getAccountById } from '../controllers/WalletController.js';
+import { transferMoney } from '../controllers/walletController.js';
+import { toggleAccountStatus } from '../controllers/StatusController.js';
 
 const router = Router();
 
 router.post('/transfer', transferMoney);
-router.get('/get-account-by-id/:id', getAccountById);
-
+router.patch('/accounts/:id/toggle-status', toggleAccountStatus);
 
 export default router;

@@ -2,26 +2,43 @@ import Account from '../models/Account.js';
 import sequelize from '../db/conection.js';
 
 export const transferMoney = async (req, res) => {
-  const { fromId, toId, amount } = req.body;
+  // 1. Recibimos el PIN desde el body
+  const { fromId, toId, amount, pin } = req.body;
   
-  // Iniciamos la transacción gestionada
   const t = await sequelize.transaction();
 
   try {
-    console.log(`[Transacción ${fromId}] Iniciando y bloqueando fila...`);
+    console.log(`[Transacción ${fromId}] Intentando acceder...`);
 
-    // Bloqueo Pesimista (FOR UPDATE)
+    // Bloqueo Pesimista
     const accountFrom = await Account.findByPk(fromId, { 
       transaction: t, 
       lock: t.LOCK.UPDATE 
     });
 
-    if (!accountFrom || accountFrom.balance < amount) {
+    // --- CAPA DE SEGURIDAD Y CONTROL DE ACCESO ---
+    
+    if (!accountFrom) {
+      throw new Error('La cuenta de origen no existe');
+    }
+
+    // A. Control de Acceso: Verificar si la cuenta está habilitada
+    if (!accountFrom.is_active) {
+      throw new Error('Acceso Denegado: Esta cuenta se encuentra bloqueada.');
+    }
+
+    // B. Autenticación: Verificar el PIN
+    if (accountFrom.pin !== pin) {
+      throw new Error('Seguridad: El PIN ingresado es incorrecto.');
+    }
+
+    // ----------------------------------------------
+
+    if (parseFloat(accountFrom.balance) < amount) {
       throw new Error('Fondos insuficientes');
     }
 
-    // SIMULACIÓN DE CONCURRENCIA
-    console.log(`[Transacción ${fromId}] Durmiendo 10 segundos...`);
+    console.log(`[Transacción ${fromId}] PIN validado. Procesando con retardo...`);
     await new Promise(resolve => setTimeout(resolve, 10000));
 
     const accountTo = await Account.findByPk(toId, { 
@@ -29,39 +46,26 @@ export const transferMoney = async (req, res) => {
       lock: t.LOCK.UPDATE 
     });
 
-    // Operaciones matemáticas
+    if (!accountTo) throw new Error('La cuenta de destino no existe');
+
+    // Operaciones
     await accountFrom.update({ 
-        balance: parseFloat(accountFrom.balance) - amount 
+        balance: parseFloat(accountFrom.balance) - parseFloat(amount) 
     }, { transaction: t });
 
     await accountTo.update({ 
-        balance: parseFloat(accountTo.balance) + amount 
+        balance: parseFloat(accountTo.balance) + parseFloat(amount) 
     }, { transaction: t });
 
-    // Guardar cambios
     await t.commit();
-    console.log(`[Transacción ${fromId}] ✔ Completada.`);
-    res.json({ message: 'Transferencia exitosa' });
+    res.json({ message: 'Transferencia exitosa autorizada' });
 
   } catch (error) {
-    // Revertir en caso de error o fondos insuficientes
     await t.rollback();
-    console.log(`[Transacción ${fromId}] ✘ Error: ${error.message}`);
-    res.status(400).json({ error: error.message });
+    console.log(`[Transacción ${fromId}] ✘ Error de seguridad/proceso: ${error.message}`);
+    
+    // Diferenciamos el código de error para el frontend
+    const statusCode = error.message.includes('Seguridad') ? 401 : 400;
+    res.status(statusCode).json({ error: error.message });
   }
 };
-
-export const getAccountById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const account = await Account.findByPk(id);
-
-    if (!account) {
-      return res.status(404).json({ error: 'Cuenta no encontrada' });
-    }
-
-    res.json(account);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener la cuenta' });
-  }
-};
